@@ -5,16 +5,20 @@ import html
 import requests
 import dotenv
 from datetime import datetime, timedelta
+import smtplib
 dotenv.load_dotenv()
 
 STOCK = "TSLA"
 COMPANY_NAME = "Tesla Inc"
-
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")
 ALPHAVANTAGE_FUNCTION = "TIME_SERIES_DAILY"
 SERIES_NAME = "Time Series (Daily)"
-
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+GMAIL_ADDRESS= os.getenv('GMAIL_ADDRESS')
+GMAIL_PASSWORD= os.getenv('GMAIL_PASSWORD')
+GMAIL_HOST_NAME=os.getenv("GMAIL_HOST_NAME")
+PORT = int(os.getenv('PORT'))
+TIMEOUT = int(os.getenv('TIMEOUT'))
 
 def get_last_two_trading_days():
     '''Ensure that the most recent trading days are fetched and return that date string formatted in list.'''
@@ -51,13 +55,18 @@ def get_news():
 
     return news_formatted
 
-
 ## STEP 3: Use https://www.twilio.com
-# Send a seperate message with the percentage change and each article's title and description to your phone number.
+# Send a seperate message with the percentage change and each article's title and description to your phone number or email
 def send_message(news, delta):
-    for n_ in news:
-        message = f'{STOCK}: {delta}% \nHeadline: {n_['headline']}\nBrief:{n_['description']}'
-        print(message)
+    '''Send message with subject and body to an email.'''
+    with smtplib.SMTP(GMAIL_HOST_NAME, PORT, timeout=TIMEOUT) as connection:
+        connection.starttls()
+        connection.login(GMAIL_ADDRESS, GMAIL_PASSWORD)
+        for n_ in news:
+            subject = f'{STOCK}: {delta}%'
+            message = f'{n_['headline']}\nBrief:{n_['description']}'
+            connection.sendmail(from_addr=GMAIL_ADDRESS, to_addrs="jagnatrainer@gmail.com", msg=f"Subject: {subject}\n\n {message}")
+            print(f"Email send with:{message}")
 
 alphavantage_url = "https://www.alphavantage.co/query"
 alphavantage_params = {
@@ -76,35 +85,9 @@ else:
         day_before_yesterday_open = float(data[SERIES_NAME][day_before_yesterday_formatted]["1. open"])
         delta_percent = round((yesterday_open - day_before_yesterday_open) * 100 / day_before_yesterday_open, 3)
 
-        n = get_news()
-        send_message(n, delta_percent)
-        print(delta_percent)
         if abs(delta_percent) > 5:
             n = get_news()
-
-            print("get news")
-
+            send_message(n, delta_percent)
 
     except KeyError:
         print("Error: Missing stock data for required dates.")
-
-
-
-
-
-
-
-
-
-
-#Optional: Format the SMS message like this: 
-"""
-TSLA: 🔺2%
-Headline: Were Hedge Funds Right About Piling Into Tesla Inc. (TSLA)?. 
-Brief: We at Insider Monkey have gone over 821 13F filings that hedge funds and prominent investors are required to file by the SEC The 13F filings show the funds' and investors' portfolio positions as of March 31st, near the height of the coronavirus market crash.
-or
-"TSLA: 🔻5%
-Headline: Were Hedge Funds Right About Piling Into Tesla Inc. (TSLA)?. 
-Brief: We at Insider Monkey have gone over 821 13F filings that hedge funds and prominent investors are required to file by the SEC The 13F filings show the funds' and investors' portfolio positions as of March 31st, near the height of the coronavirus market crash.
-"""
-
